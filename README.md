@@ -143,6 +143,14 @@ RecapTube AI shares its architecture with **SkipTube AI** (the AI sponsor-skippe
 
 ---
 
+## 🎨 UI / design
+
+The interface uses a YouTube-like visual language built from **functional design
+tokens** (color values, spacing, radii, type scale) and the **Roboto** font
+(Apache 2.0). These are functional values, not protected by copyright; no
+trademarks, logos or proprietary fonts of any platform are used. The per-product
+accent (RecapTube: blue `#3ea6ff`) keeps it distinct.
+
 ## 📝 License
 
 MIT — see [LICENSE](LICENSE).
