@@ -171,6 +171,9 @@ class RecapManager {
         return;
       }
 
+      // Keep the transcript around for the Q&A feature.
+      this.lastTranscriptSegments = transcript.segments;
+
       this.showToast(
         INFO_MESSAGES.TRANSCRIPT_LOADING.replace('{count}', transcript.segments.length),
         NOTIFICATION_TYPES.INFO
@@ -463,13 +466,33 @@ class RecapManager {
         </div>`;
     }
 
-    body.innerHTML = summaryHtml + chaptersHtml;
+    const qaHtml = (this.lastTranscriptSegments && this.lastTranscriptSegments.length)
+      ? `<div class="rt-section rt-qa">
+           <div class="rt-section-title">Ask the video</div>
+           <div class="rt-qa-row">
+             <input class="rt-qa-input" type="text" placeholder="Ask anything about this video…" />
+             <button class="rt-qa-send" title="Ask">➤</button>
+           </div>
+           <div class="rt-qa-answer" style="display:none;"></div>
+         </div>`
+      : '';
+
+    body.innerHTML = summaryHtml + chaptersHtml + qaHtml;
 
     const regenInline = body.querySelector('.rt-regen-inline');
     if (regenInline) {
       regenInline.addEventListener('click', () => {
         if (this.currentVideoId) this.processVideo(this.currentVideoId, { force: true });
       });
+    }
+
+    // Q&A wiring
+    const qaInput = body.querySelector('.rt-qa-input');
+    const qaSend = body.querySelector('.rt-qa-send');
+    if (qaInput && qaSend) {
+      const submit = () => this.askQuestion(qaInput.value, body);
+      qaSend.addEventListener('click', submit);
+      qaInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
     }
 
     // Wire chapter + key-point clicks (seek). Key points only carry a timestamp
@@ -499,6 +522,51 @@ class RecapManager {
       ? `<button class="rt-kp-jump" data-start="${start}" title="Jump to ${this.formatTime(start)}">${this.formatTime(start)}</button> `
       : '';
     return `<li>${chip}<span class="rt-kp-text">${this.escape(text)}</span></li>`;
+  }
+
+  // ---------------------------------------------------------------- Q&A
+  async askQuestion(question, body) {
+    const q = (question || '').trim();
+    const answerEl = body.querySelector('.rt-qa-answer');
+    if (!answerEl) return;
+    if (!q) { answerEl.style.display = 'none'; return; }
+    if (!this.lastTranscriptSegments || !this.lastTranscriptSegments.length) {
+      answerEl.style.display = 'block';
+      answerEl.innerHTML = `<div class="rt-error">No transcript available for this video.</div>`;
+      return;
+    }
+
+    answerEl.style.display = 'block';
+    answerEl.innerHTML = `<div class="rt-loading"><span class="rt-spinner"></span> Thinking…</div>`;
+
+    const response = await this.sendMessage({
+      action: 'answerQuestion',
+      data: {
+        videoId: this.currentVideoId,
+        segments: this.lastTranscriptSegments,
+        question: q,
+        lang: this.resolveLang(),
+        durationSec: this.getDurationSec()
+      }
+    });
+
+    if (!response || !response.success) {
+      answerEl.innerHTML = `<div class="rt-error">${this.escape((response && response.error) || 'Could not answer')}</div>`;
+      return;
+    }
+    this.renderAnswer(answerEl, response.answer, response.citations || []);
+  }
+
+  renderAnswer(answerEl, answer, citations) {
+    const cites = (citations || [])
+      .map(c => `<button class="rt-kp-jump" data-start="${c.start}" title="Jump to ${this.formatTime(c.start)}">${this.formatTime(c.start)}${c.label ? ' · ' + this.escape(c.label) : ''}</button>`)
+      .join(' ');
+    answerEl.innerHTML =
+      `<div class="rt-qa-text">${this.escape(answer || '')}</div>` +
+      (cites ? `<div class="rt-qa-cites">${cites}</div>` : '');
+    answerEl.querySelectorAll('.rt-kp-jump').forEach(el => {
+      el.addEventListener('click', (e) => { e.stopPropagation(); this.seekTo(Number(el.dataset.start)); });
+    });
   }
 
   // ---------------------------------------------------- progress-bar segments
@@ -649,6 +717,7 @@ class RecapManager {
     this.clearMarkers();
     document.querySelectorAll('.' + CSS_CLASSES.TOOLTIP).forEach(t => t.remove());
     this.lastRecap = null;
+    this.lastTranscriptSegments = null;
   }
 
   // --------------------------------------------------------------- messaging
@@ -743,6 +812,19 @@ html[dark] .${CSS_CLASSES.PANEL} .rt-head{background:#181818;border-color:#333;}
   padding:1px 6px;margin-right:2px;cursor:pointer;vertical-align:baseline;
 }
 .${CSS_CLASSES.PANEL} .rt-kp-jump:hover{background:rgba(62,166,255,.25);}
+.${CSS_CLASSES.PANEL} .rt-qa-row{display:flex;gap:6px;}
+.${CSS_CLASSES.PANEL} .rt-qa-input{
+  flex:1;background:rgba(127,127,127,.10);color:inherit;border:1px solid rgba(127,127,127,.3);
+  border-radius:8px;padding:7px 10px;font-size:13px;font-family:inherit;
+}
+.${CSS_CLASSES.PANEL} .rt-qa-input:focus{outline:none;border-color:#3ea6ff;}
+.${CSS_CLASSES.PANEL} .rt-qa-send{
+  background:#3ea6ff;color:#fff;border:none;border-radius:8px;padding:0 12px;cursor:pointer;font-size:14px;
+}
+.${CSS_CLASSES.PANEL} .rt-qa-send:hover{filter:brightness(1.05);}
+.${CSS_CLASSES.PANEL} .rt-qa-answer{margin-top:8px;font-size:13px;line-height:1.5;}
+.${CSS_CLASSES.PANEL} .rt-qa-text{white-space:pre-wrap;}
+.${CSS_CLASSES.PANEL} .rt-qa-cites{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px;}
 .${CSS_CLASSES.PANEL} .rt-note{opacity:.75;font-style:italic;}
 .${CSS_CLASSES.PANEL} .rt-chapter{
   display:flex;align-items:baseline;gap:8px;padding:5px 6px;border-radius:8px;cursor:pointer;

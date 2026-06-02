@@ -74,6 +74,9 @@ class BackgroundService {
         case 'generateRecap':
           await this.handleGenerateRecap(data, sendResponse);
           break;
+        case 'answerQuestion':
+          await this.handleAnswerQuestion(data, sendResponse);
+          break;
         case 'healSelectors':
           await this.handleHealSelectors(data, sendResponse);
           break;
@@ -159,6 +162,48 @@ class BackgroundService {
       sendResponse({ success: true, recap, cached: false });
     } catch (error) {
       logger.error('Recap failed', { error: error.message, videoId: data && data.videoId });
+      sendResponse({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Answer a free-form question about a video using its transcript.
+   * data: { videoId, segments, question, lang }
+   */
+  async handleAnswerQuestion(data, sendResponse) {
+    try {
+      const { segments = [], question = '', lang = 'en', durationSec = 0, videoId = '' } = data || {};
+      if (!question.trim()) {
+        sendResponse({ success: false, error: 'Empty question' });
+        return;
+      }
+      if (!Array.isArray(segments) || segments.length === 0) {
+        sendResponse({ success: false, error: 'No transcript available' });
+        return;
+      }
+      if (!this.recapService) {
+        await this.loadAPIKey();
+        if (!this.recapService) {
+          sendResponse({ success: false, error: 'API key not configured. Please set your API key in the extension popup.' });
+          return;
+        }
+      }
+
+      const stored = await chrome.storage.local.get(['advancedSettings']);
+      const aiModel = (stored.advancedSettings && stored.advancedSettings.aiModel) || undefined;
+      const baseLang = this.normalizeLang(lang);
+
+      const transcript = Transcript.fromDOM(segments, videoId || 'q', '');
+      const result = await this.recapService.answerQuestion(transcript, {
+        question,
+        targetLanguage: this.languageName(baseLang),
+        aiModel,
+        durationSec
+      });
+
+      sendResponse({ success: true, answer: result.answer, citations: result.citations });
+    } catch (error) {
+      logger.error('Q&A failed', { error: error.message });
       sendResponse({ success: false, error: error.message });
     }
   }

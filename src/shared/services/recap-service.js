@@ -134,6 +134,49 @@ Output format (every "start" is an integer count of seconds):
   }
 
   /**
+   * Answer a free-form question about the video, grounded in the transcript.
+   * @param {Transcript} transcript
+   * @param {Object} opts - { question, targetLanguage, aiModel, durationSec }
+   * @returns {Promise<{answer:string, citations:Array<{start:number,label:string}>}>}
+   */
+  async answerQuestion(transcript, opts = {}) {
+    const { question = '', targetLanguage = 'English', aiModel, durationSec = 0 } = opts;
+    const formatted = transcript.formatForAI();
+
+    const systemPrompt = `You answer questions about a YouTube video using ONLY its transcript.
+
+Write the answer in ${targetLanguage}. Be concise and specific. If the transcript does not contain the answer, say so honestly (in ${targetLanguage}) instead of guessing.
+
+Return a JSON object:
+{
+  "answer": "<answer in ${targetLanguage}>",
+  "citations": [ { "start": <integer seconds>, "label": "<2-5 word quote/topic>" } ]
+}
+"citations" are optional moments in the video that support the answer; "start" MUST be a plain integer number of seconds taken from the [Ns] markers (never a "mm:ss" string). Output VALID JSON only, no markdown.`;
+
+    const userMessage = `Transcript (each line is "[<seconds>s] text"):\n\n${formatted}\n\nQuestion: ${question}\n\nAnswer with JSON only.`;
+
+    const payload = this.provider.createPayload(systemPrompt, userMessage, aiModel);
+    const response = await this.provider.sendRequest(payload);
+    const parsed = this.provider.parseResponse(response) || {};
+
+    const max = durationSec && durationSec > 0 ? Math.floor(durationSec) : Infinity;
+    const citations = Array.isArray(parsed.citations)
+      ? parsed.citations
+          .map(c => ({
+            start: this.parseStartToSeconds(c && (c.start !== undefined ? c.start : c.time)),
+            label: (c && typeof c.label === 'string' ? c.label.trim() : '')
+          }))
+          .filter(c => c.start !== null && c.start <= max)
+      : [];
+
+    return {
+      answer: typeof parsed.answer === 'string' ? parsed.answer.trim() : '',
+      citations
+    };
+  }
+
+  /**
    * Normalize key points to a list of { text, start } objects. Accepts both the
    * new object shape { text, start } and legacy plain strings (older cached
    * recaps), in which case `start` is null (rendered without a jump chip).
