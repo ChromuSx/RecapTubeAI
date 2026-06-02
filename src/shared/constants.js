@@ -43,7 +43,10 @@ export const SELECTORS = {
   PLAYER_CHAPTERS: '.ytp-chapters-container .ytp-chapter-hover-container',
   // Chapters engagement panel + its rows.
   NATIVE_CHAPTERS_PANEL: 'ytd-macro-markers-list-renderer, ytd-engagement-panel-section-list-renderer[target-id*="chapters"], ytd-engagement-panel-section-list-renderer[target-id*="macro-markers"]',
-  NATIVE_CHAPTER_ITEM: 'ytd-macro-markers-list-item-renderer'
+  NATIVE_CHAPTER_ITEM: 'ytd-macro-markers-list-item-renderer',
+  // Inside a native chapter item: the title and the timestamp text.
+  NATIVE_CHAPTER_TITLE: '#details h4, h4.macro-markers, #details .macro-markers, [id="details"] h4',
+  NATIVE_CHAPTER_TIME: '#time, .macro-markers#time, [id="time"]'
 };
 
 // MAIN-world transcript interceptor message contract (see src/content/transcript-interceptor.js)

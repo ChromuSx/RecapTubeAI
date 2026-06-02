@@ -248,6 +248,45 @@ class RecapManager {
     }
   }
 
+  /**
+   * Read the creator's chapters from the DOM (chapters engagement panel).
+   * Returns [{ start, title }] sorted by start, or [] if not readable.
+   */
+  readNativeChapters() {
+    try {
+      const items = document.querySelectorAll(SELECTORS.NATIVE_CHAPTER_ITEM);
+      const out = [];
+      items.forEach((item) => {
+        const titleEl = item.querySelector(SELECTORS.NATIVE_CHAPTER_TITLE) ||
+          item.querySelector('h4') || item.querySelector('#details');
+        const timeEl = item.querySelector(SELECTORS.NATIVE_CHAPTER_TIME) ||
+          item.querySelector('#time');
+        const title = titleEl ? (titleEl.textContent || '').trim() : '';
+        const timeText = timeEl ? (timeEl.textContent || '').trim() : '';
+        const start = this.parseTimeText(timeText);
+        if (title && start !== null) out.push({ start, title });
+      });
+      // Dedupe + sort (DOM order is already chronological, but be safe).
+      const seen = new Set();
+      return out
+        .sort((a, b) => a.start - b.start)
+        .filter(c => { if (seen.has(c.start)) return false; seen.add(c.start); return true; });
+    } catch {
+      return [];
+    }
+  }
+
+  /** Parse a "m:ss" / "h:mm:ss" chapter timestamp to seconds (null if invalid). */
+  parseTimeText(t) {
+    const s = (t || '').trim();
+    if (!/^\d{1,2}(:\d{1,2}){1,2}$/.test(s)) return null;
+    const parts = s.split(':').map(n => parseInt(n, 10));
+    if (parts.some(n => isNaN(n))) return null;
+    let secs = 0;
+    for (const p of parts) secs = secs * 60 + p;
+    return secs;
+  }
+
   // ----------------------------------------------------------- page metadata
   getChannelInfo() {
     try {
@@ -454,10 +493,10 @@ class RecapManager {
           <div class="rt-chapters">${chapters.map((c, i) => this.chapterRow(c, i)).join('')}</div>
         </div>`;
     } else if (hasNative) {
-      chaptersHtml = `<div class="rt-section">
-          <div class="rt-section-title">Chapters</div>
-          <div class="rt-note">📑 This video already has chapters from the creator.</div>
-        </div>`;
+      // The video has creator chapters: list them (read from the DOM) instead of
+      // just noting their existence. The chapters panel may not be in the DOM yet,
+      // so we render what we have now and refresh asynchronously below.
+      chaptersHtml = `<div class="rt-section rt-chapters-section">${this.nativeChaptersInner(this.readNativeChapters())}</div>`;
     } else {
       // needChapters was true but the AI returned none (or all were invalid).
       chaptersHtml = `<div class="rt-section">
@@ -511,14 +550,49 @@ class RecapManager {
       trToggle.addEventListener('click', () => this.toggleTranscript(body));
     }
 
-    // Wire chapter + key-point clicks (seek). Key points only carry a timestamp
-    // when the AI provided one.
-    body.querySelectorAll('.rt-chapter, .rt-kp-jump').forEach(el => {
+    this.wireChapterClicks(body);
+
+    // Native chapters may not be in the DOM yet at first render; refresh the
+    // section once the chapters panel loads.
+    if (hasNative && (chapters.length === 0)) {
+      this.refreshNativeChapters(body);
+    }
+  }
+
+  wireChapterClicks(scope) {
+    scope.querySelectorAll('.rt-chapter, .rt-kp-jump').forEach(el => {
+      if (el.dataset.rtWired === '1') return;
+      el.dataset.rtWired = '1';
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         this.seekTo(Number(el.dataset.start));
       });
     });
+  }
+
+  /** Inner HTML for the native-chapters section (list if readable, else note). */
+  nativeChaptersInner(native) {
+    if (native && native.length > 0) {
+      return `<div class="rt-section-title">Chapters <span class="rt-badge-creator">Creator</span></div>
+          <div class="rt-chapters">${native.map((c, i) => this.chapterRow(c, i)).join('')}</div>`;
+    }
+    return `<div class="rt-section-title">Chapters</div>
+        <div class="rt-note">📑 This video already has chapters from the creator.</div>`;
+  }
+
+  /** Poll briefly for the creator chapters panel, then populate the section. */
+  refreshNativeChapters(body, attempt = 0) {
+    const section = body.querySelector('.rt-chapters-section');
+    if (!section) return;
+    const native = this.readNativeChapters();
+    if (native.length > 0) {
+      section.innerHTML = this.nativeChaptersInner(native);
+      this.wireChapterClicks(section);
+      return;
+    }
+    if (attempt < 6) {
+      setTimeout(() => this.refreshNativeChapters(body, attempt + 1), 700);
+    }
   }
 
   chapterRow(c, i) {
@@ -877,6 +951,7 @@ html[dark] .${CSS_CLASSES.PANEL} .rt-head{background:#181818;border-color:#333;}
 .${CSS_CLASSES.PANEL} .rt-section + .rt-section{margin-top:14px;}
 .${CSS_CLASSES.PANEL} .rt-section-title{font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em;opacity:.7;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
 .${CSS_CLASSES.PANEL} .rt-badge-ai{background:#3ea6ff;color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;letter-spacing:.05em;}
+.${CSS_CLASSES.PANEL} .rt-badge-creator{background:#27ae60;color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;letter-spacing:.05em;}
 .${CSS_CLASSES.PANEL} .rt-summary{white-space:pre-wrap;}
 .${CSS_CLASSES.PANEL} .rt-keypoints{margin:8px 0 0;padding-left:18px;}
 .${CSS_CLASSES.PANEL} .rt-keypoints li{margin:4px 0;}
