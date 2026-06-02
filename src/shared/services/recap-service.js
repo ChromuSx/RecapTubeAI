@@ -75,9 +75,7 @@ export class RecapService {
       const result = {
         language: typeof parsed.language === 'string' ? parsed.language : targetLanguage,
         summary: typeof parsed.summary === 'string' ? parsed.summary.trim() : '',
-        keyPoints: Array.isArray(parsed.keyPoints)
-          ? parsed.keyPoints.filter(p => typeof p === 'string' && p.trim()).map(p => p.trim())
-          : [],
+        keyPoints: this.normalizeKeyPoints(parsed.keyPoints, durationSec),
         chapters: normalizedChapters
       };
 
@@ -113,7 +111,7 @@ Write ALL human-readable output (the summary, key points and chapter titles) in 
 Produce a JSON object with these fields:
 - "language": the BCP-47 code of ${targetLanguage} (e.g. "it", "en").
 - "summary": a faithful, neutral summary of what the video covers (${lengthGuide.split(' and ')[0]}). No marketing tone, no "in this video"; just the substance.
-- "keyPoints": an array of the most important takeaways (${lengthGuide.split(' and ')[1] || 'key points'}), each a single concise sentence.
+- "keyPoints": an array of the most important takeaways (${lengthGuide.split(' and ')[1] || 'key points'}). Each item is an object { "text": "<one concise sentence in ${targetLanguage}>", "start": <integer SECONDS where this point is discussed> }. Take "start" from the nearest [Ns] timestamp in the transcript; it MUST be a plain integer (e.g. 0, 73, 240), never a "mm:ss" string.
 ${chaptersRule}
 
 RULES:
@@ -121,11 +119,11 @@ RULES:
 2. Output VALID JSON only — no markdown, no commentary outside the JSON.
 3. Keep chapter "start" values within the video length and strictly increasing.
 
-Output format (note "start" is an integer count of seconds):
+Output format (every "start" is an integer count of seconds):
 {
   "language": "<bcp-47>",
   "summary": "<text in ${targetLanguage}>",
-  "keyPoints": ["<point 1>", "<point 2>"],
+  "keyPoints": [ { "text": "<point>", "start": 0 }, { "text": "<point>", "start": 73 } ],
   "chapters": [ { "start": 0, "title": "<title>" }, { "start": 142, "title": "<title>" } ]
 }`;
   }
@@ -133,6 +131,32 @@ Output format (note "start" is an integer count of seconds):
   buildUserMessage(formattedTranscript, title) {
     const head = title ? `Video title: ${title}\n\n` : '';
     return `${head}Transcript (each line is "[<seconds>s] text"):\n\n${formattedTranscript}\n\nSummarize and (if requested) split into chapters. Respond with JSON only.`;
+  }
+
+  /**
+   * Normalize key points to a list of { text, start } objects. Accepts both the
+   * new object shape { text, start } and legacy plain strings (older cached
+   * recaps), in which case `start` is null (rendered without a jump chip).
+   */
+  normalizeKeyPoints(rawPoints, durationSec) {
+    if (!Array.isArray(rawPoints)) return [];
+    const max = durationSec && durationSec > 0 ? Math.floor(durationSec) : Infinity;
+    return rawPoints
+      .map(p => {
+        if (typeof p === 'string') {
+          return p.trim() ? { text: p.trim(), start: null } : null;
+        }
+        if (p && typeof p === 'object') {
+          const text = typeof p.text === 'string' ? p.text.trim()
+            : (typeof p.point === 'string' ? p.point.trim() : '');
+          if (!text) return null;
+          let start = this.parseStartToSeconds(p.start !== undefined ? p.start : p.time);
+          if (start !== null && start > max) start = null;
+          return { text, start };
+        }
+        return null;
+      })
+      .filter(Boolean);
   }
 
   /**

@@ -340,7 +340,11 @@ class RecapManager {
     if (r.summary) { lines.push('SUMMARY', r.summary.trim(), ''); }
     if (Array.isArray(r.keyPoints) && r.keyPoints.length) {
       lines.push('KEY POINTS');
-      r.keyPoints.forEach(p => lines.push('• ' + p));
+      r.keyPoints.forEach(p => {
+        const text = typeof p === 'string' ? p : (p && p.text) || '';
+        const start = typeof p === 'object' && p && Number.isFinite(p.start) ? p.start : null;
+        lines.push('• ' + (start !== null ? `[${this.formatTime(start)}] ` : '') + text);
+      });
       lines.push('');
     }
     if (Array.isArray(r.chapters) && r.chapters.length) {
@@ -434,7 +438,7 @@ class RecapManager {
            <div class="rt-section-title">Summary</div>
            <div class="rt-summary">${this.escape(recap.summary)}</div>
            ${(recap.keyPoints && recap.keyPoints.length)
-             ? `<ul class="rt-keypoints">${recap.keyPoints.map(p => `<li>${this.escape(p)}</li>`).join('')}</ul>`
+             ? `<ul class="rt-keypoints">${recap.keyPoints.map(p => this.keyPointRow(p)).join('')}</ul>`
              : ''}
          </div>`
       : '';
@@ -468,9 +472,13 @@ class RecapManager {
       });
     }
 
-    // Wire chapter clicks (seek).
-    body.querySelectorAll('.rt-chapter').forEach(row => {
-      row.addEventListener('click', () => this.seekTo(Number(row.dataset.start)));
+    // Wire chapter + key-point clicks (seek). Key points only carry a timestamp
+    // when the AI provided one.
+    body.querySelectorAll('.rt-chapter, .rt-kp-jump').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.seekTo(Number(el.dataset.start));
+      });
     });
   }
 
@@ -481,6 +489,16 @@ class RecapManager {
         <span class="rt-time">${this.formatTime(c.start)}</span>
         <span class="rt-ch-title">${this.escape(c.title)}</span>
       </div>`;
+  }
+
+  keyPointRow(p) {
+    // Back-compat: p may be a plain string (old cache) or { text, start }.
+    const text = typeof p === 'string' ? p : (p && p.text) || '';
+    const start = typeof p === 'object' && p && Number.isFinite(p.start) ? p.start : null;
+    const chip = start !== null
+      ? `<button class="rt-kp-jump" data-start="${start}" title="Jump to ${this.formatTime(start)}">${this.formatTime(start)}</button> `
+      : '';
+    return `<li>${chip}<span class="rt-kp-text">${this.escape(text)}</span></li>`;
   }
 
   // ---------------------------------------------------- progress-bar segments
@@ -718,7 +736,13 @@ html[dark] .${CSS_CLASSES.PANEL} .rt-head{background:#181818;border-color:#333;}
 .${CSS_CLASSES.PANEL} .rt-badge-ai{background:#3ea6ff;color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;letter-spacing:.05em;}
 .${CSS_CLASSES.PANEL} .rt-summary{white-space:pre-wrap;}
 .${CSS_CLASSES.PANEL} .rt-keypoints{margin:8px 0 0;padding-left:18px;}
-.${CSS_CLASSES.PANEL} .rt-keypoints li{margin:3px 0;}
+.${CSS_CLASSES.PANEL} .rt-keypoints li{margin:4px 0;}
+.${CSS_CLASSES.PANEL} .rt-kp-jump{
+  display:inline-block;font-variant-numeric:tabular-nums;font-size:11px;font-weight:600;
+  color:#3ea6ff;background:rgba(62,166,255,.12);border:none;border-radius:5px;
+  padding:1px 6px;margin-right:2px;cursor:pointer;vertical-align:baseline;
+}
+.${CSS_CLASSES.PANEL} .rt-kp-jump:hover{background:rgba(62,166,255,.25);}
 .${CSS_CLASSES.PANEL} .rt-note{opacity:.75;font-style:italic;}
 .${CSS_CLASSES.PANEL} .rt-chapter{
   display:flex;align-items:baseline;gap:8px;padding:5px 6px;border-radius:8px;cursor:pointer;
