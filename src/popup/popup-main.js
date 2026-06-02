@@ -31,6 +31,7 @@ class PopupManager {
 
     // Toggles
     this.$('enabled').checked = this.settings.enabled;
+    this.$('autoGenerate').checked = this.settings.autoGenerate;
     this.$('generateSummary').checked = this.settings.generateSummary;
     this.$('generateChapters').checked = this.settings.generateChapters;
     this.$('showProgressMarkers').checked = this.settings.showProgressMarkers;
@@ -89,8 +90,8 @@ class PopupManager {
 
     // Feature toggles / selects -> settings
     const settingControls = [
-      ['enabled', 'checkbox'], ['generateSummary', 'checkbox'], ['generateChapters', 'checkbox'],
-      ['showProgressMarkers', 'checkbox'], ['autoOpenPanel', 'checkbox'],
+      ['enabled', 'checkbox'], ['autoGenerate', 'checkbox'], ['generateSummary', 'checkbox'],
+      ['generateChapters', 'checkbox'], ['showProgressMarkers', 'checkbox'], ['autoOpenPanel', 'checkbox'],
       ['summaryLength', 'value'], ['outputLanguage', 'value']
     ];
     settingControls.forEach(([id, kind]) => {

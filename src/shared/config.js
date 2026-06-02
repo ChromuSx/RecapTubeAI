@@ -74,6 +74,7 @@ export const CONFIG = {
   DEFAULTS: {
     SETTINGS: {
       enabled: true,                 // master on/off
+      autoGenerate: true,            // generate on each video automatically; if false, wait for a button click (saves API cost)
       generateSummary: true,         // produce the AI summary
       generateChapters: true,        // produce AI chapters when the video has none
       showProgressMarkers: true,     // draw chapter markers on the progress bar

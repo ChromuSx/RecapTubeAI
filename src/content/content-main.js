@@ -139,6 +139,12 @@ class RecapManager {
       return;
     }
 
+    // Manual mode: don't spend an API call until the user asks for it.
+    if (!force && this.settings.autoGenerate === false) {
+      this.renderPanel({ state: 'idle' });
+      return;
+    }
+
     this.isProcessing = true;
     try {
       const hasNative = this.hasNativeChapters();
@@ -394,6 +400,17 @@ class RecapManager {
 
     // Copy button only makes sense once a recap is on screen.
     if (copyBtn) copyBtn.style.display = state === 'ready' ? '' : 'none';
+
+    if (state === 'idle') {
+      body.innerHTML = `<div class="rt-idle">
+          <div class="rt-note">Manual mode is on.</div>
+          <button class="rt-cta rt-generate">🧠 Generate recap</button>
+        </div>`;
+      body.querySelector('.rt-generate').addEventListener('click', () => {
+        if (this.currentVideoId) this.processVideo(this.currentVideoId, { force: true });
+      });
+      return;
+    }
 
     if (state === 'loading') {
       body.innerHTML = `<div class="rt-loading"><span class="rt-spinner"></span> ${INFO_MESSAGES.GENERATING}</div>`;
@@ -714,6 +731,9 @@ html[dark] .${CSS_CLASSES.PANEL} .rt-head{background:#181818;border-color:#333;}
 .${CSS_CLASSES.PANEL} .rt-spinner{width:16px;height:16px;border:2px solid rgba(127,127,127,.3);border-top-color:#3ea6ff;border-radius:50%;animation:rt-spin .8s linear infinite;}
 .${CSS_CLASSES.PANEL} .rt-error{color:#e74c3c;margin-bottom:8px;}
 .${CSS_CLASSES.PANEL} .rt-retry{border:1px solid #3ea6ff;color:#3ea6ff;border-radius:8px;padding:5px 12px;background:transparent;cursor:pointer;}
+.${CSS_CLASSES.PANEL} .rt-idle{display:flex;flex-direction:column;gap:10px;align-items:flex-start;padding:6px 0;}
+.${CSS_CLASSES.PANEL} .rt-cta{background:#3ea6ff;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;}
+.${CSS_CLASSES.PANEL} .rt-cta:hover{filter:brightness(1.05);}
 @keyframes rt-spin{to{transform:rotate(360deg);}}
 .${CSS_CLASSES.NOTIFICATION}{
   position:fixed;top:70px;right:20px;z-index:100000;max-width:340px;
