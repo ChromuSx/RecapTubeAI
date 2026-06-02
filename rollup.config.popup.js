@@ -39,7 +39,8 @@ export default {
         // Manifest and assets
         { src: 'src/manifest.json', dest: 'dist' },
         { src: 'src/icons', dest: 'dist' },
-        { src: 'src/logo.png', dest: 'dist' }
+        { src: 'src/logo.png', dest: 'dist' },
+        { src: 'src/logo-wordmark.png', dest: 'dist' }
       ],
       hook: 'writeBundle'
     })
