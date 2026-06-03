@@ -19,7 +19,8 @@ const OUT = join(__dirname, 'store-assets');
 mkdirSync(OUT, { recursive: true });
 
 const LOGO = join(__dirname, 'src', 'logo.png');             // transparent square mark
-const PROMO = join(SRC_DIR, 'riquadro promozionale.png');     // rich promo image
+const PROMO = join(SRC_DIR, 'riquadro promozionale.png');     // rich promo image (portrait-ish)
+const PROMO_WIDE = join(SRC_DIR, 'Riquadro promozionale in primo piano.png'); // wide promo (~2.5:1, marquee-ready)
 
 // Brand palette sampled from the logo card.
 const BG_A = '#1c2330';
@@ -95,11 +96,11 @@ async function composeTile({ w, h, file, title, titleSize, tagline, taglineSize,
   console.log(`✓ ${file} (${w}x${h})`);
 }
 
-/** Letterbox the promo image onto a brand background at the given size. */
-async function screenshot(w, h, file) {
+/** Letterbox a promo image onto a brand background at the given size. */
+async function screenshot(w, h, file, src = PROMO) {
   const bg = await sharp(bgSvg(w, h)).png().toBuffer();
   // Fit the promo fully inside with a small margin.
-  const inner = await sharp(PROMO)
+  const inner = await sharp(src)
     .resize(Math.round(w * 0.96), Math.round(h * 0.96), { fit: 'inside', withoutEnlargement: false })
     .png()
     .toBuffer();
@@ -110,27 +111,34 @@ async function screenshot(w, h, file) {
   console.log(`✓ ${file} (${w}x${h})`);
 }
 
+/** Resize an image to exactly fill w×h (cover). Use when the source ratio matches. */
+async function cover(src, w, h, file) {
+  await sharp(src)
+    .resize(w, h, { fit: 'cover', position: 'centre' })
+    .png()
+    .toFile(join(OUT, file));
+  console.log(`✓ ${file} (${w}x${h})`);
+}
+
 async function run() {
   // Store icon
   await sharp(LOGO).resize(128, 128, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toFile(join(OUT, 'icon-128.png'));
   console.log('✓ icon-128.png (128x128)');
 
-  // Screenshots (promo image letterboxed)
+  // Screenshots: portrait-rich promo letterboxed + the wide promo letterboxed.
   await screenshot(1280, 800, 'screenshot-1-1280x800.png');
   await screenshot(640, 400, 'screenshot-1-640x400.png');
+  await screenshot(1280, 800, 'screenshot-2-1280x800.png', PROMO_WIDE);
 
-  // Promo tiles (clean, logo + text)
+  // Marquee: the wide promo is ~2.5:1 — exactly the marquee ratio — so cover-fit it.
+  await cover(PROMO_WIDE, 1400, 560, 'marquee-1400x560.png');
+
+  // Small tile: built clean (the rich promo is unreadable at 440x280).
   await composeTile({
     w: 440, h: 280, file: 'small-tile-440x280.png',
     title: 'RecapTube AI', titleSize: 34,
     tagline: 'Summarize · Translate · Chapters', taglineSize: 17,
     logoSize: 120
-  });
-  await composeTile({
-    w: 1400, h: 560, file: 'marquee-1400x560.png',
-    title: 'RecapTube AI', titleSize: 92,
-    tagline: 'AI summaries, translation & smart chapters', taglineSize: 32,
-    logoSize: 300
   });
 
   console.log('Done →', OUT);
